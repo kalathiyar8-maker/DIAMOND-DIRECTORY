@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.DD" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#2563C9</item>
+        <item name="android:statusBarColor">#0B1E3B</item>
+    </style>
+    <style name="Theme.DD.Popup" parent="Theme.Material3.DayNight.Dialog">
+        <item name="colorPrimary">#2563C9</item>
+    </style>
+</resources>

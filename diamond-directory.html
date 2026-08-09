@@ -1,0 +1,714 @@
+<!--
+  Diamond Directory — contact manager for diamond-factory teams
+  Single-file app. Works on mobile and desktop. Data persists via window.storage.
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta charset="utf-8">
+<style>
+  :root{
+    --ink:#0B1E3B; --sapphire:#2563C9; --sapphire-d:#1D4FA3; --cyan:#38BDF8;
+    --paper:#EEF2F8; --surface:#FFFFFF; --line:#E1E7F1; --muted:#67779A;
+    --text:#12203A; --ok:#0E9F6E; --danger:#DC2626; --amber:#D9822B;
+    --shadow:0 8px 30px rgba(11,30,59,.10);
+    --radius:16px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans Gujarati","Noto Sans",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{background:var(--paper);color:var(--text);overscroll-behavior-y:none}
+  #app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;position:relative;background:var(--paper)}
+
+  /* ---------- Header ---------- */
+  header{
+    position:sticky;top:0;z-index:20;
+    background:linear-gradient(160deg,#0B1E3B 0%,#12305E 100%);
+    color:#fff;padding:14px 16px 16px;
+    box-shadow:0 4px 18px rgba(11,30,59,.28);
+  }
+  .brand{display:flex;align-items:center;gap:11px}
+  .logo{width:38px;height:38px;flex:0 0 auto;filter:drop-shadow(0 2px 5px rgba(56,189,248,.4))}
+  .brand h1{font-size:19px;margin:0;letter-spacing:.055em;font-weight:700}
+  .brand h1 span{color:var(--cyan)}
+  .brand small{display:block;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#9FC0EA;font-weight:600;margin-top:1px}
+  .facet-line{height:3px;margin:12px -16px -16px;background:linear-gradient(90deg,#38BDF8,#2563C9,#9F7AEA,#38BDF8);background-size:300% 100%;animation:shine 8s linear infinite}
+  @keyframes shine{to{background-position:300% 0}}
+  @media(prefers-reduced-motion:reduce){.facet-line{animation:none}}
+
+  .searchbar{margin-top:14px;position:relative}
+  .searchbar input{
+    width:100%;border:none;border-radius:12px;padding:11px 14px 11px 40px;font-size:15px;
+    background:rgba(255,255,255,.14);color:#fff;outline:none;
+  }
+  .searchbar input::placeholder{color:#B9CDEA}
+  .searchbar input:focus{background:rgba(255,255,255,.22);box-shadow:0 0 0 2px rgba(56,189,248,.5)}
+  .searchbar svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);opacity:.7}
+
+  /* ---------- Segmented ---------- */
+  .tabs{display:flex;gap:6px;padding:12px 16px 4px}
+  .tab{flex:1;text-align:center;padding:9px 6px;border-radius:11px;font-size:13.5px;font-weight:600;
+    background:var(--surface);color:var(--muted);border:1px solid var(--line);cursor:pointer;transition:.15s}
+  .tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .tab .n{font-weight:700}
+  .tab-menu{flex:0 0 auto;width:42px;border-radius:11px;border:1px solid var(--line);background:var(--surface);
+    color:var(--ink);font-size:22px;font-weight:700;line-height:1;cursor:pointer;padding:0}
+  .tab-menu:active{background:var(--paper)}
+
+  /* department manager */
+  .dm-row{display:flex;align-items:center;gap:11px;background:var(--paper);border-radius:13px;padding:11px 12px;margin:9px 0}
+  .dm-dot{width:13px;height:13px;border-radius:50%;flex:0 0 auto}
+  .dm-name{flex:1;font-weight:600;font-size:15px}
+  .dm-count{font-size:12px;color:var(--muted);background:#fff;border:1px solid var(--line);padding:2px 9px;border-radius:20px}
+  .dm-del{border:none;background:#fff;color:var(--danger);width:34px;height:34px;border-radius:9px;font-size:16px;cursor:pointer;border:1px solid #F3C9C9}
+  .dm-del:active{background:#FDECEC}
+  .dm-add{display:flex;gap:8px;margin:16px 0 4px}
+
+  /* ---------- Department chips ---------- */
+  .dept-scroll{display:flex;gap:8px;overflow-x:auto;padding:8px 16px 4px;scrollbar-width:none}
+  .dept-scroll::-webkit-scrollbar{display:none}
+  .chip{white-space:nowrap;padding:7px 13px;border-radius:20px;font-size:13px;font-weight:600;
+    background:var(--surface);border:1px solid var(--line);color:var(--muted);cursor:pointer;display:flex;align-items:center;gap:7px}
+  .chip .dot{width:9px;height:9px;border-radius:50%}
+  .chip.active{background:var(--sapphire);border-color:var(--sapphire);color:#fff}
+  .chip.active .dot{background:#fff!important}
+
+  /* ---------- List ---------- */
+  main{flex:1;padding:8px 12px 100px}
+  .group-title{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    margin:16px 6px 6px;display:flex;align-items:center;gap:8px}
+  .group-title .dot{width:10px;height:10px;border-radius:50%}
+  .card{
+    display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);
+    border-radius:var(--radius);padding:11px 12px;margin:8px 0;box-shadow:0 1px 2px rgba(11,30,59,.04);cursor:pointer;transition:.12s}
+  .card:active{transform:scale(.99);background:#F7F9FD}
+  .avatar{width:46px;height:46px;border-radius:12px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:17px;color:#fff;position:relative;overflow:hidden;background:var(--ink)}
+  .avatar img{width:100%;height:100%;object-fit:cover}
+  .avatar .gem{position:absolute;right:-3px;bottom:-3px;width:15px;height:15px;opacity:.85}
+  .c-info{flex:1;min-width:0}
+  .c-name{font-weight:600;font-size:15.5px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-sub{font-size:12.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .badge{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;color:#fff;white-space:nowrap}
+  .plus-btn{width:36px;height:36px;flex:0 0 auto;border-radius:10px;border:1px solid var(--line);background:#fff;
+    display:flex;align-items:center;justify-content:center;color:var(--sapphire);font-size:22px;line-height:1;cursor:pointer}
+  .plus-btn:active{background:var(--paper)}
+  .has-note{color:var(--amber)}
+
+  .empty{text-align:center;color:var(--muted);padding:60px 30px}
+  .empty svg{opacity:.35;margin-bottom:14px}
+  .empty h3{margin:0 0 6px;color:var(--text);font-size:16px}
+  .empty p{margin:0;font-size:13.5px;line-height:1.5}
+
+  /* ---------- FAB ---------- */
+  .fab{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:30;
+    background:linear-gradient(135deg,#2563C9,#1D4FA3);color:#fff;border:none;border-radius:30px;
+    padding:14px 22px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:9px;
+    box-shadow:0 10px 26px rgba(37,99,201,.45);cursor:pointer}
+  .fab:active{transform:translateX(-50%) scale(.97)}
+  @media(min-width:520px){.fab{left:auto;right:calc(50% - 260px + 22px);transform:none}.fab:active{transform:scale(.97)}}
+
+  /* ---------- Sheet / Modal ---------- */
+  .overlay{position:fixed;inset:0;background:rgba(11,30,59,.5);z-index:40;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px)}
+  .overlay.open{display:flex}
+  .sheet{background:var(--surface);width:100%;max-width:520px;border-radius:22px 22px 0 0;max-height:92vh;overflow-y:auto;
+    animation:slideup .28s cubic-bezier(.2,.8,.2,1);padding-bottom:24px}
+  @keyframes slideup{from{transform:translateY(100%)}to{transform:translateY(0)}}
+  @media(prefers-reduced-motion:reduce){.sheet{animation:none}}
+  .grab{width:42px;height:5px;border-radius:5px;background:var(--line);margin:10px auto 4px}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:8px 18px 6px}
+  .sheet-head h2{font-size:18px;margin:0;font-weight:700}
+  .x{width:34px;height:34px;border-radius:50%;border:none;background:var(--paper);color:var(--muted);font-size:19px;cursor:pointer}
+  .sheet-body{padding:6px 18px}
+
+  label.fld{display:block;margin:14px 0 6px;font-size:12.5px;font-weight:700;color:var(--muted);letter-spacing:.02em}
+  .inp{width:100%;border:1.5px solid var(--line);border-radius:12px;padding:12px 13px;font-size:15px;background:#fff;outline:none;font-family:inherit;color:var(--text)}
+  .inp:focus{border-color:var(--sapphire);box-shadow:0 0 0 3px rgba(37,99,201,.12)}
+  textarea.inp{resize:vertical;min-height:70px}
+  select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2367779A' d='M6 8 0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+
+  .photo-row{display:flex;align-items:center;gap:14px;margin-top:6px}
+  .photo-prev{width:72px;height:72px;border-radius:14px;background:var(--paper);border:1.5px dashed var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .photo-prev img{width:100%;height:100%;object-fit:cover}
+  .btn-line{display:inline-flex;align-items:center;gap:7px;padding:9px 14px;border-radius:11px;border:1.5px solid var(--line);
+    background:#fff;color:var(--sapphire);font-weight:600;font-size:13.5px;cursor:pointer}
+  .btn-line:active{background:var(--paper)}
+
+  .dept-inline{display:flex;gap:8px;margin-top:8px}
+  .dept-inline input{flex:1}
+  .save-bar{padding:16px 18px 4px}
+  .btn-primary{width:100%;background:linear-gradient(135deg,#2563C9,#1D4FA3);color:#fff;border:none;border-radius:13px;
+    padding:15px;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(37,99,201,.35)}
+  .btn-primary:active{transform:scale(.99)}
+  .btn-danger-ghost{width:100%;background:#fff;color:var(--danger);border:1.5px solid #F3C9C9;border-radius:13px;padding:13px;font-size:15px;font-weight:600;cursor:pointer;margin-top:10px}
+
+  /* ---------- Detail ---------- */
+  .detail-hero{text-align:center;padding:6px 18px 4px}
+  .detail-photo{width:96px;height:96px;border-radius:26px;margin:0 auto 12px;overflow:hidden;display:flex;align-items:center;justify-content:center;
+    font-size:34px;font-weight:700;color:#fff;background:var(--ink);position:relative}
+  .detail-photo img{width:100%;height:100%;object-fit:cover}
+  .detail-name{font-size:22px;font-weight:700;margin:0}
+  .detail-dept{display:inline-flex;align-items:center;gap:7px;margin-top:8px;padding:5px 13px;border-radius:20px;font-size:12.5px;font-weight:700;color:#fff}
+  .actions{display:flex;gap:10px;padding:16px 18px 4px}
+  .act{flex:1;border:none;border-radius:14px;padding:13px 8px;font-weight:700;font-size:13.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px}
+  .act svg{width:20px;height:20px}
+  .act-call{background:var(--ok);color:#fff}
+  .act-copy{background:var(--paper);color:var(--ink)}
+  .act-edit{background:var(--paper);color:var(--ink)}
+  .info-block{background:var(--paper);border-radius:14px;padding:14px;margin:14px 18px 0}
+  .info-block h4{margin:0 0 6px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .info-block p{margin:0;font-size:15px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+  .phone-big{font-size:18px;font-weight:700;letter-spacing:.02em}
+
+  /* recorder */
+  .rec-row{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap}
+  .rec-dot{width:10px;height:10px;border-radius:50%;background:var(--danger);animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.3}}
+  audio{width:100%;margin-top:8px}
+
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 20px;border-radius:12px;font-size:14px;z-index:60;opacity:0;transition:.25s;pointer-events:none;box-shadow:var(--shadow)}
+  .toast.show{opacity:1;bottom:100px}
+  .count-pill{background:rgba(255,255,255,.15);padding:2px 9px;border-radius:20px;font-size:12px;font-weight:700}
+</style>
+
+<div id="app">
+  <header>
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 48 48" fill="none">
+        <path d="M12 6h24l8 11-20 25L4 17z" fill="#38BDF8"/>
+        <path d="M12 6h24l8 11H4z" fill="#7DD3FC"/>
+        <path d="M24 42 4 17h40z" fill="#2563C9"/>
+        <path d="M24 42 16 17h16z" fill="#1D4FA3"/>
+        <path d="M12 6 16 17H4zM36 6 32 17h12z" fill="#BAE6FD"/>
+        <path d="M20 6 16 17 24 6zM28 6l4 11L24 6z" fill="#E0F2FE" opacity=".7"/>
+      </svg>
+      <div>
+        <h1>Diamond<span> Directory</span></h1>
+        <small>Contact & Team Manager</small>
+      </div>
+    </div>
+    <div class="searchbar">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+      <input id="search" type="text" placeholder="નામ, નંબર કે ડિપાર્ટમેન્ટ શોધો…" autocomplete="off">
+    </div>
+    <div class="facet-line"></div>
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-view="all" id="tab-all">બધા સંપર્ક <span class="n" id="cnt-all">0</span></div>
+    <div class="tab" data-view="dept" id="tab-dept">ડિપાર્ટમેન્ટ પ્રમાણે</div>
+    <button class="tab-menu" id="deptMenuBtn" title="ડિપાર્ટમેન્ટ મેનેજ કરો" aria-label="ડિપાર્ટમેન્ટ મેનેજ કરો">⋮</button>
+  </div>
+
+  <div class="dept-scroll" id="deptScroll"></div>
+
+  <main id="list"></main>
+
+  <button class="fab" id="fab">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+    નવો નંબર
+  </button>
+</div>
+
+<!-- Add / Edit sheet -->
+<div class="overlay" id="editOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <h2 id="editTitle">નવો સંપર્ક ઉમેરો</h2>
+      <button class="x" data-close>&times;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="photo-row">
+        <div class="photo-prev" id="photoPrev">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#B7C2D8" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+        </div>
+        <div>
+          <button class="btn-line" id="photoBtn">📷 ફોટો ઉમેરો</button>
+          <div class="hint">કેમેરા ખૂલશે અથવા ગેલેરીમાંથી પસંદ કરો</div>
+        </div>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" hidden>
+      </div>
+
+      <label class="fld">નામ *</label>
+      <input class="inp" id="fName" placeholder="કારીગર / વ્યક્તિનું નામ">
+
+      <label class="fld">ફોન નંબર *</label>
+      <input class="inp" id="fPhone" type="tel" inputmode="tel" placeholder="+91 ...">
+
+      <label class="fld">ડિપાર્ટમેન્ટ</label>
+      <select class="inp" id="fDept"></select>
+      <div class="dept-inline">
+        <input class="inp" id="fNewDept" placeholder="નવું ડિપાર્ટમેન્ટ ઉમેરો">
+        <button class="btn-line" id="addDeptBtn">ઉમેરો</button>
+      </div>
+
+      <label class="fld">નોટ</label>
+      <textarea class="inp" id="fNote" placeholder="કામની વિગત, યાદ રાખવાનું, વગેરે…"></textarea>
+
+      <label class="fld">વોઈસ નોટ / રેકોર્ડિંગ</label>
+      <div class="rec-row">
+        <button class="btn-line" id="recBtn">🎙️ રેકોર્ડ કરો</button>
+        <span id="recStatus" style="font-size:12.5px;color:var(--muted)"></span>
+      </div>
+      <audio id="recPlayer" controls hidden></audio>
+      <div class="hint">ફોન કોલ પતી ગયા પછી અગત્યની વાત વોઈસ નોટ તરીકે સેવ કરો.</div>
+    </div>
+    <div class="save-bar">
+      <button class="btn-primary" id="saveBtn">સેવ કરો</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail sheet -->
+<div class="overlay" id="detailOverlay">
+  <div class="sheet" id="detailSheet">
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <h2 style="font-size:15px;color:var(--muted)">સંપર્ક વિગત</h2>
+      <button class="x" data-close>&times;</button>
+    </div>
+    <div id="detailContent"></div>
+  </div>
+</div>
+
+<!-- Incoming-number popup (simulated post-call save) -->
+<div class="overlay" id="popOverlay">
+  <div class="sheet" style="max-width:400px;border-radius:22px;margin:auto 12px;align-self:center">
+    <div class="sheet-head" style="padding-top:18px">
+      <h2 style="font-size:17px">📞 નવો નંબર મળ્યો</h2>
+      <button class="x" data-close>&times;</button>
+    </div>
+    <div class="sheet-body">
+      <p style="margin:0 0 4px;font-size:22px;font-weight:700" id="popNum"></p>
+      <p style="margin:0;color:var(--muted);font-size:13.5px">આ નંબર Diamond Directory માં સેવ કરવો છે?</p>
+    </div>
+    <div class="save-bar" style="display:flex;gap:10px">
+      <button class="btn-primary" style="flex:1" id="popSave">હા, વિગત ઉમેરો</button>
+      <button class="btn-line" style="flex:0 0 auto;padding:15px 18px" data-close>ના</button>
+    </div>
+  </div>
+</div>
+
+<!-- Department manager sheet -->
+<div class="overlay" id="deptOverlay">
+  <div class="sheet" style="max-height:88vh">
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <h2>ડિપાર્ટમેન્ટ મેનેજ કરો</h2>
+      <button class="x" data-close>&times;</button>
+    </div>
+    <div class="sheet-body">
+      <div class="dm-add">
+        <input class="inp" id="dmNewName" placeholder="નવું ડિપાર્ટમેન્ટ નામ">
+        <button class="btn-line" id="dmAddBtn" style="flex:0 0 auto">ઉમેરો</button>
+      </div>
+      <div class="hint">ડિપાર્ટમેન્ટ ડિલીટ કરવા 🗑️ પર ક્લિક કરો — બે વાર કન્ફર્મ થશે. એના સંપર્ક રહેશે પણ ડિપાર્ટમેન્ટ વગરના થઈ જશે.</div>
+      <div id="dmList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  const KEY = "dd:store";
+  const DEPT_COLORS = ["#2563C9","#0E9F6E","#D9822B","#8B5CF6","#DC2626","#0891B2","#DB2777","#65A30D","#EA580C","#4F46E5"];
+  const SEED_DEPTS = ["Galaxy Scanning","Doping","Data Entry","QC","Polish","Sarin/Laser","Manager","Skin"];
+
+  let store = { contacts: [], departments: [] };
+  let view = "all";          // all | dept
+  let activeDept = null;     // filter
+  let editingId = null;      // null = new
+  let tmpPhoto = null;       // dataURL while editing
+  let tmpAudio = null;       // dataURL while editing
+  let mediaRec = null, recChunks = [], recording = false;
+
+  const $ = s => document.querySelector(s);
+  const el = (id) => document.getElementById(id);
+
+  /* ---------- storage ---------- */
+  async function load(){
+    try{
+      const r = await window.storage.get(KEY);
+      if(r && r.value){ store = JSON.parse(r.value); }
+    }catch(e){ /* first run — no key */ }
+    if(!store.departments || !store.departments.length){
+      store.departments = SEED_DEPTS.slice();
+    }
+    if(!store.contacts) store.contacts = [];
+  }
+  async function save(){
+    try{ await window.storage.set(KEY, JSON.stringify(store)); }
+    catch(e){ toast("સેવ કરવામાં તકલીફ — ફરી પ્રયત્ન કરો"); }
+  }
+
+  /* ---------- helpers ---------- */
+  function deptColor(name){
+    const list = store.departments;
+    const i = list.indexOf(name);
+    return DEPT_COLORS[(i<0?list.length:i) % DEPT_COLORS.length];
+  }
+  function initials(n){
+    n = (n||"").trim();
+    if(!n) return "?";
+    const p = n.split(/\s+/);
+    return (p[0][0] + (p[1]? p[1][0] : "")).toUpperCase();
+  }
+  function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+  function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+  let toastT;
+  function toast(msg){
+    const t = el("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove("show"),2200);
+  }
+
+  /* ---------- image compress ---------- */
+  function compress(file, cb){
+    const img = new Image();
+    const rd = new FileReader();
+    rd.onload = ()=>{ img.src = rd.result; };
+    img.onload = ()=>{
+      const max = 320;
+      let {width:w, height:h} = img;
+      const scale = Math.min(1, max/Math.max(w,h));
+      w = Math.round(w*scale); h = Math.round(h*scale);
+      const cv = document.createElement("canvas");
+      cv.width=w; cv.height=h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      cb(cv.toDataURL("image/jpeg",0.7));
+    };
+    img.onerror = ()=>{ toast("ફોટો વાંચી શકાયો નહીં"); };
+    rd.readAsDataURL(file);
+  }
+
+  /* ---------- render ---------- */
+  function matches(c, q){
+    if(!q) return true;
+    q = q.toLowerCase();
+    return (c.name||"").toLowerCase().includes(q)
+        || (c.phone||"").toLowerCase().includes(q)
+        || (c.dept||"").toLowerCase().includes(q)
+        || (c.note||"").toLowerCase().includes(q);
+  }
+
+  function render(){
+    const q = el("search").value.trim();
+    let items = store.contacts.filter(c=>matches(c,q));
+    if(activeDept) items = items.filter(c=>c.dept===activeDept);
+    items.sort((a,b)=>(a.name||"").localeCompare(b.name||"","gu"));
+
+    el("cnt-all").textContent = store.contacts.length;
+
+    // department chips
+    const ds = el("deptScroll");
+    ds.style.display = view==="dept" ? "flex" : "none";
+    if(view==="dept"){
+      let html = `<div class="chip ${!activeDept?'active':''}" data-dept="">બધા</div>`;
+      store.departments.forEach(d=>{
+        const n = store.contacts.filter(c=>c.dept===d).length;
+        html += `<div class="chip ${activeDept===d?'active':''}" data-dept="${esc(d)}">
+          <span class="dot" style="background:${deptColor(d)}"></span>${esc(d)} (${n})</div>`;
+      });
+      ds.innerHTML = html;
+      ds.querySelectorAll(".chip").forEach(ch=>ch.onclick=()=>{
+        activeDept = ch.dataset.dept || null; render();
+      });
+    }
+
+    const list = el("list");
+    if(!items.length){
+      list.innerHTML = `<div class="empty">
+        <svg width="70" height="70" viewBox="0 0 48 48" fill="none"><path d="M12 6h24l8 11-20 25L4 17z" stroke="#B7C2D8" stroke-width="2" stroke-linejoin="round"/><path d="M4 17h40M24 42 12 6M24 42 36 6" stroke="#B7C2D8" stroke-width="1.5"/></svg>
+        <h3>${q||activeDept?'કંઈ મળ્યું નહીં':'હજી કોઈ સંપર્ક નથી'}</h3>
+        <p>${q||activeDept?'બીજું શોધી જુઓ':'નીચે "નવો નંબર" પર ક્લિક કરીને પહેલો સંપર્ક ઉમેરો'}</p></div>`;
+      return;
+    }
+
+    if(view==="dept" && !activeDept){
+      // grouped by department
+      let html="";
+      const grouped = {};
+      items.forEach(c=>{ const d=c.dept||"અન્ય"; (grouped[d]=grouped[d]||[]).push(c); });
+      Object.keys(grouped).sort().forEach(d=>{
+        html += `<div class="group-title"><span class="dot" style="background:${deptColor(d)}"></span>${esc(d)} · ${grouped[d].length}</div>`;
+        grouped[d].forEach(c=> html += cardHTML(c));
+      });
+      list.innerHTML = html;
+    } else {
+      list.innerHTML = items.map(cardHTML).join("");
+    }
+    bindCards();
+  }
+
+  function cardHTML(c){
+    const col = deptColor(c.dept);
+    const av = c.photo
+      ? `<img src="${c.photo}" alt="">`
+      : `<span>${esc(initials(c.name))}</span><svg class="gem" viewBox="0 0 48 48"><path d="M12 6h24l8 11-20 25L4 17z" fill="#38BDF8"/></svg>`;
+    return `<div class="card" data-id="${c.id}">
+      <div class="avatar" style="${c.photo?'':'background:'+shade(col)}">${av}</div>
+      <div class="c-info">
+        <div class="c-name">${esc(c.name)}</div>
+        <div class="c-sub">
+          ${c.dept?`<span class="badge" style="background:${col}">${esc(c.dept)}</span>`:''}
+          ${esc(c.phone)}
+        </div>
+      </div>
+      <button class="plus-btn ${c.note?'has-note':''}" data-plus="${c.id}" title="નોટ / વિગત">
+        ${c.note ? '&#9733;' : '+'}
+      </button>
+    </div>`;
+  }
+  function shade(hex){ return `linear-gradient(135deg,${hex},${hex}cc)`; }
+
+  function bindCards(){
+    document.querySelectorAll(".card").forEach(card=>{
+      card.onclick = (e)=>{
+        if(e.target.closest("[data-plus]")) return;
+        openDetail(card.dataset.id);
+      };
+    });
+    document.querySelectorAll("[data-plus]").forEach(b=>{
+      b.onclick = (e)=>{ e.stopPropagation(); openDetail(b.dataset.plus); };
+    });
+  }
+
+  /* ---------- detail ---------- */
+  function openDetail(id){
+    const c = store.contacts.find(x=>x.id===id);
+    if(!c) return;
+    const col = deptColor(c.dept);
+    const photo = c.photo ? `<img src="${c.photo}">` : esc(initials(c.name));
+    el("detailContent").innerHTML = `
+      <div class="detail-hero">
+        <div class="detail-photo" style="${c.photo?'':'background:'+shade(col)}">${photo}</div>
+        <h3 class="detail-name">${esc(c.name)}</h3>
+        ${c.dept?`<div class="detail-dept" style="background:${col}">
+          <span style="width:8px;height:8px;background:#fff;border-radius:50%"></span>${esc(c.dept)}</div>`:''}
+      </div>
+      <div class="actions">
+        <a class="act act-call" href="tel:${encodeURIComponent(c.phone)}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M4 4h4l2 5-3 2a12 12 0 006 6l2-3 5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"/></svg>કોલ કરો</a>
+        <button class="act act-copy" data-copy="${esc(c.phone)}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg>કોપી</button>
+        <button class="act act-edit" data-edit="${c.id}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>એડિટ</button>
+      </div>
+      <div class="info-block"><h4>ફોન નંબર</h4><p class="phone-big">${esc(c.phone)}</p></div>
+      ${c.note?`<div class="info-block"><h4>નોટ</h4><p>${esc(c.note)}</p></div>`:''}
+      ${c.audio?`<div class="info-block"><h4>વોઈસ નોટ</h4><audio controls src="${c.audio}"></audio></div>`:''}
+      <div class="save-bar">
+        <button class="btn-danger-ghost" data-del="${c.id}">🗑️ સંપર્ક ડિલીટ કરો</button>
+      </div>`;
+    open("detailOverlay");
+
+    el("detailContent").querySelector("[data-copy]").onclick = (e)=>{
+      copy(e.currentTarget.dataset.copy);
+    };
+    el("detailContent").querySelector("[data-edit]").onclick = ()=>{ close("detailOverlay"); openEdit(c.id); };
+    el("detailContent").querySelector("[data-del]").onclick = ()=>{
+      if(confirm(c.name+" ને ડિલીટ કરવો છે?")){
+        store.contacts = store.contacts.filter(x=>x.id!==c.id);
+        save(); close("detailOverlay"); render(); toast("ડિલીટ થયો");
+      }
+    };
+  }
+
+  function copy(txt){
+    if(navigator.clipboard){ navigator.clipboard.writeText(txt).then(()=>toast("નંબર કોપી થયો")).catch(()=>fallbackCopy(txt)); }
+    else fallbackCopy(txt);
+  }
+  function fallbackCopy(txt){
+    const t=document.createElement("textarea");t.value=txt;document.body.appendChild(t);t.select();
+    try{document.execCommand("copy");toast("નંબર કોપી થયો");}catch(e){}
+    document.body.removeChild(t);
+  }
+
+  /* ---------- edit form ---------- */
+  function fillDeptSelect(sel){
+    const s = el("fDept");
+    s.innerHTML = store.departments.map(d=>`<option value="${esc(d)}"${d===sel?' selected':''}>${esc(d)}</option>`).join("")
+      + `<option value=""${!sel?' selected':''}>— કોઈ નહીં —</option>`;
+  }
+  function openEdit(id){
+    editingId = id || null;
+    tmpPhoto = null; tmpAudio = null;
+    resetRecorder();
+    const c = id ? store.contacts.find(x=>x.id===id) : null;
+    el("editTitle").textContent = id ? "સંપર્ક એડિટ કરો" : "નવો સંપર્ક ઉમેરો";
+    el("fName").value = c ? c.name : "";
+    el("fPhone").value = c ? c.phone : "";
+    el("fNote").value = c ? (c.note||"") : "";
+    el("fNewDept").value = "";
+    fillDeptSelect(c ? c.dept : store.departments[0]);
+    tmpPhoto = c && c.photo ? c.photo : null;
+    tmpAudio = c && c.audio ? c.audio : null;
+    paintPhoto();
+    if(tmpAudio){ el("recPlayer").src=tmpAudio; el("recPlayer").hidden=false; el("recStatus").textContent="✓ સેવ્ડ"; }
+    open("editOverlay");
+    setTimeout(()=>el("fName").focus(),300);
+  }
+  function paintPhoto(){
+    el("photoPrev").innerHTML = tmpPhoto
+      ? `<img src="${tmpPhoto}">`
+      : `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#B7C2D8" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>`;
+  }
+
+  function openPopupWith(num){
+    el("popNum").textContent = num;
+    open("popOverlay");
+    el("popSave").onclick = ()=>{
+      close("popOverlay");
+      openEdit(null);
+      el("fPhone").value = num;
+    };
+  }
+
+  /* ---------- recorder ---------- */
+  function resetRecorder(){
+    recording=false; recChunks=[]; el("recStatus").textContent="";
+    el("recPlayer").hidden=true; el("recPlayer").removeAttribute("src");
+    el("recBtn").innerHTML = "🎙️ રેકોર્ડ કરો";
+  }
+  async function toggleRec(){
+    if(recording){
+      mediaRec && mediaRec.state!=="inactive" && mediaRec.stop();
+      return;
+    }
+    if(!navigator.mediaDevices || !window.MediaRecorder){ toast("આ ડિવાઈસ પર રેકોર્ડિંગ શક્ય નથી"); return; }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      mediaRec = new MediaRecorder(stream);
+      recChunks=[];
+      mediaRec.ondataavailable = e=>{ if(e.data.size) recChunks.push(e.data); };
+      mediaRec.onstop = ()=>{
+        stream.getTracks().forEach(t=>t.stop());
+        const blob = new Blob(recChunks,{type:"audio/webm"});
+        const fr = new FileReader();
+        fr.onload = ()=>{ tmpAudio = fr.result; el("recPlayer").src=tmpAudio; el("recPlayer").hidden=false; el("recStatus").textContent="✓ સેવ થયું"; };
+        fr.readAsDataURL(blob);
+        recording=false; el("recBtn").innerHTML="🎙️ ફરી રેકોર્ડ કરો";
+      };
+      mediaRec.start();
+      recording=true;
+      el("recBtn").innerHTML='<span class="rec-dot"></span> રોકો';
+      el("recStatus").textContent="રેકોર્ડ થઈ રહ્યું છે…";
+    }catch(e){ toast("માઈક પરમિશન નથી"); }
+  }
+
+  /* ---------- save contact ---------- */
+  function doSave(){
+    const name = el("fName").value.trim();
+    const phone = el("fPhone").value.trim();
+    if(!name){ toast("નામ લખો"); el("fName").focus(); return; }
+    if(!phone){ toast("ફોન નંબર લખો"); el("fPhone").focus(); return; }
+    const dept = el("fDept").value;
+    const note = el("fNote").value.trim();
+    if(editingId){
+      const c = store.contacts.find(x=>x.id===editingId);
+      Object.assign(c,{name,phone,dept,note,photo:tmpPhoto,audio:tmpAudio});
+    }else{
+      store.contacts.push({id:uid(),name,phone,dept,note,photo:tmpPhoto,audio:tmpAudio,created:Date.now()});
+    }
+    save(); close("editOverlay"); render();
+    toast(editingId?"અપડેટ થયું":"સંપર્ક સેવ થયો ✓");
+    editingId=null;
+  }
+
+  /* ---------- department manager ---------- */
+  function openDeptManager(){
+    el("dmNewName").value = "";
+    renderDeptManager();
+    open("deptOverlay");
+  }
+  function renderDeptManager(){
+    const box = el("dmList");
+    if(!store.departments.length){
+      box.innerHTML = `<div class="hint" style="text-align:center;padding:20px">હજી કોઈ ડિપાર્ટમેન્ટ નથી. ઉપરથી ઉમેરો.</div>`;
+      return;
+    }
+    box.innerHTML = store.departments.map(d=>{
+      const n = store.contacts.filter(c=>c.dept===d).length;
+      return `<div class="dm-row">
+        <span class="dm-dot" style="background:${deptColor(d)}"></span>
+        <span class="dm-name">${esc(d)}</span>
+        <span class="dm-count">${n} સંપર્ક</span>
+        <button class="dm-del" data-ddel="${esc(d)}" title="ડિલીટ">🗑️</button>
+      </div>`;
+    }).join("");
+    box.querySelectorAll("[data-ddel]").forEach(b=>{
+      b.onclick = ()=>deleteDept(b.dataset.ddel);
+    });
+  }
+  function deleteDept(name){
+    const n = store.contacts.filter(c=>c.dept===name).length;
+    // first confirmation
+    if(!confirm(`"${name}" ડિપાર્ટમેન્ટ ડિલીટ કરવું છે?`)) return;
+    // second confirmation
+    const msg = n>0
+      ? `ખરેખર ડિલીટ કરવું?\nઆ ડિપાર્ટમેન્ટના ${n} સંપર્ક રહેશે, પણ એ "ડિપાર્ટમેન્ટ વગરના" થઈ જશે.`
+      : `ખરેખર "${name}" ડિલીટ કરવું?`;
+    if(!confirm(msg)) return;
+    store.departments = store.departments.filter(d=>d!==name);
+    store.contacts.forEach(c=>{ if(c.dept===name) c.dept=""; });
+    if(activeDept===name) activeDept=null;
+    save(); renderDeptManager(); render();
+    toast("ડિપાર્ટમેન્ટ ડિલીટ થયું");
+  }
+  el("deptMenuBtn").onclick = openDeptManager;
+  el("dmAddBtn").onclick = ()=>{
+    const v = el("dmNewName").value.trim();
+    if(!v){ el("dmNewName").focus(); return; }
+    if(store.departments.includes(v)){ toast("આ ડિપાર્ટમેન્ટ પહેલેથી છે"); return; }
+    store.departments.push(v);
+    save(); el("dmNewName").value=""; renderDeptManager(); render();
+    toast("ડિપાર્ટમેન્ટ ઉમેરાયું ✓");
+  };
+  el("dmNewName").addEventListener("keydown",e=>{ if(e.key==="Enter") el("dmAddBtn").click(); });
+
+  /* ---------- overlay controls ---------- */
+  function open(id){ el(id).classList.add("open"); document.body.style.overflow="hidden"; }
+  function close(id){ el(id).classList.remove("open"); document.body.style.overflow=""; if(recording){mediaRec&&mediaRec.stop();} }
+  document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{
+    b.closest(".overlay") && close(b.closest(".overlay").id);
+  });
+  document.querySelectorAll(".overlay").forEach(o=>o.onclick=e=>{ if(e.target===o) close(o.id); });
+
+  /* ---------- events ---------- */
+  el("search").oninput = render;
+  el("tab-all").onclick = ()=>{ view="all"; activeDept=null; el("tab-all").classList.add("active"); el("tab-dept").classList.remove("active"); render(); };
+  el("tab-dept").onclick = ()=>{ view="dept"; el("tab-dept").classList.add("active"); el("tab-all").classList.remove("active"); render(); };
+  el("fab").onclick = ()=>openEdit(null);
+  el("saveBtn").onclick = doSave;
+  el("recBtn").onclick = toggleRec;
+
+  el("photoBtn").onclick = ()=>el("photoInput").click();
+  el("photoInput").onchange = (e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    compress(f,(data)=>{ tmpPhoto=data; paintPhoto(); });
+    e.target.value="";
+  };
+  el("addDeptBtn").onclick = ()=>{
+    const v = el("fNewDept").value.trim();
+    if(!v) return;
+    if(!store.departments.includes(v)) store.departments.push(v);
+    save(); fillDeptSelect(v); el("fNewDept").value=""; toast("ડિપાર્ટમેન્ટ ઉમેરાયું");
+  };
+
+  /* quick-add: paste a number in search + press Enter → save popup */
+  el("search").addEventListener("keydown",(e)=>{
+    if(e.key==="Enter"){
+      const v = el("search").value.trim();
+      if(/^[+\d][\d\s\-()]{5,}$/.test(v) && !store.contacts.some(c=>c.phone.replace(/\D/g,"")===v.replace(/\D/g,""))){
+        openPopupWith(v);
+      }
+    }
+  });
+
+  /* ---------- boot ---------- */
+  load().then(render);
+})();
+</script>
