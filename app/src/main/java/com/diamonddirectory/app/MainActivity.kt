@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +13,7 @@ import android.provider.MediaStore
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -23,6 +25,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.graphics.drawable.RoundedBitmapDrawableFactory
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import java.io.BufferedOutputStream
@@ -258,11 +261,7 @@ class MainActivity : AppCompatActivity() {
                 layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = pad(8) }
                 isClickable = true; setOnClickListener { contactActions(c) }
             }
-            val thumb = loadThumb(c.photo, pad(48))
-            if (thumb != null) card.addView(ImageView(this).apply {
-                setImageBitmap(thumb); scaleType = ImageView.ScaleType.CENTER_CROP
-                layoutParams = LinearLayout.LayoutParams(pad(48), pad(48)).apply { marginEnd = pad(12) }
-            })
+            card.addView(avatarView(c, pad(46)))
             val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             col.addView(TextView(this).apply { text = c.name; textSize = 16f; setTextColor(0xFF12203A.toInt()) })
             val sub = buildString { if (c.dept.isNotEmpty()) append("[${c.dept}]  "); append(c.phone) }
@@ -304,26 +303,33 @@ class MainActivity : AppCompatActivity() {
             setPadding(pad(20), pad(8), pad(20), 0)
         }
 
-        // reusable image slot -> returns a getter for current path
+        // reusable image slot -> returns a getter for current path (compact, single line)
         fun imageSlot(label: String, initial: String, suffix: String): () -> String {
             var path = initial
             box.addView(TextView(this).apply {
-                text = label; textSize = 12f; setTextColor(0xFF67779A.toInt()); setPadding(0, pad(12), 0, pad(2))
+                text = label; textSize = 12f; setTextColor(0xFF67779A.toInt()); setPadding(0, pad(10), 0, pad(2))
             })
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
             val preview = ImageView(this).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 setBackgroundColor(0xFFEEF2F8.toInt())
-                layoutParams = LinearLayout.LayoutParams(pad(72), pad(72)).apply { marginEnd = pad(10) }
+                layoutParams = LinearLayout.LayoutParams(pad(52), pad(52)).apply { marginEnd = pad(10) }
             }
             fun paint() {
-                val b = loadThumb(path, pad(72))
+                val b = loadThumb(path, pad(52))
                 if (b != null) preview.setImageBitmap(b) else preview.setImageResource(android.R.drawable.ic_menu_camera)
             }
             paint()
-            val btns = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            btns.addView(Button(this).apply {
-                text = "ઉમેરો/બદલો"; textSize = 12f
+            preview.setOnClickListener { if (path.isNotEmpty()) openImage(path) }   // tap to zoom
+
+            fun smallBtn(txt: String) = Button(this).apply {
+                text = txt; textSize = 11f
+                minWidth = 0; minimumWidth = 0
+                setPadding(pad(12), pad(6), pad(12), pad(6))
+                val lp = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT); lp.marginEnd = pad(6)
+                layoutParams = lp
+            }
+            val addB = smallBtn("ઉમેરો/બદલો").apply {
                 setOnClickListener {
                     pendingPhoto = { uri ->
                         val p = savePhoto(uri, cid, suffix)
@@ -331,12 +337,9 @@ class MainActivity : AppCompatActivity() {
                     }
                     chooseSource()
                 }
-            })
-            btns.addView(Button(this).apply {
-                text = "દૂર કરો"; textSize = 12f
-                setOnClickListener { path = ""; paint() }
-            })
-            row.addView(preview); row.addView(btns)
+            }
+            val delB = smallBtn("દૂર").apply { setOnClickListener { path = ""; paint() } }
+            row.addView(preview); row.addView(addB); row.addView(delB)
             box.addView(row)
             return { path }
         }
@@ -414,19 +417,53 @@ class MainActivity : AppCompatActivity() {
 
     private fun savePhoto(uri: Uri, id: String, suffix: String): String {
         return try {
-            val opt = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opt) }
-            var sample = 1
-            val maxDim = 1400   // higher, so Aadhaar text stays readable
-            while (opt.outWidth / sample > maxDim || opt.outHeight / sample > maxDim) sample *= 2
-            val o2 = BitmapFactory.Options().apply { inSampleSize = sample }
-            val bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o2) }
-                ?: return ""
             val dir = File(filesDir, "photos").apply { mkdirs() }
             val out = File(dir, "$id$suffix.jpg")
-            FileOutputStream(out).use { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            // copy the ORIGINAL bytes as-is (full quality, readable Aadhaar)
+            contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(out).use { output -> input.copyTo(output) }
+            } ?: return ""
             out.absolutePath
         } catch (e: Exception) { "" }
+    }
+
+    private fun openImage(path: String) {
+        if (path.isEmpty()) return
+        startActivity(Intent(this, ImageViewerActivity::class.java).putExtra("path", path))
+    }
+
+    private val avatarColors = intArrayOf(
+        0xFFE57373.toInt(), 0xFF64B5F6.toInt(), 0xFF81C784.toInt(), 0xFFFFB74D.toInt(),
+        0xFFBA68C8.toInt(), 0xFF4DB6AC.toInt(), 0xFF7986CB.toInt(), 0xFFA1887F.toInt()
+    )
+    private fun avatarColor(name: String) =
+        avatarColors[Math.abs(name.hashCode()) % avatarColors.size]
+
+    /** Circular photo avatar, or a coloured initial circle (like phone contacts). */
+    private fun avatarView(c: Contact, sizePx: Int): View {
+        if (c.photo.isNotEmpty()) {
+            val bmp = loadThumb(c.photo, sizePx)
+            if (bmp != null) {
+                return ImageView(this).apply {
+                    val rbd = RoundedBitmapDrawableFactory.create(resources, bmp)
+                    rbd.isCircular = true
+                    setImageDrawable(rbd)
+                    layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply { marginEnd = pad(12) }
+                    setOnClickListener { openImage(c.photo) }   // tap to zoom
+                }
+            }
+        }
+        val initial = c.name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        return TextView(this).apply {
+            text = initial
+            gravity = Gravity.CENTER
+            setTextColor(0xFFFFFFFF.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, sizePx * 0.42f)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL; setColor(avatarColor(c.name))
+            }
+            layoutParams = LinearLayout.LayoutParams(sizePx, sizePx).apply { marginEnd = pad(12) }
+        }
     }
 
     private fun loadThumb(path: String, size: Int): Bitmap? {

@@ -40,6 +40,10 @@ class CallerInfoActivity : AppCompatActivity() {
                 setImageBitmap(bmp)
                 scaleType = ImageView.ScaleType.CENTER_CROP
                 layoutParams = LinearLayout.LayoutParams(px(96), px(96)).apply { topMargin = px(10) }
+                setOnClickListener {
+                    startActivity(Intent(this@CallerInfoActivity, ImageViewerActivity::class.java)
+                        .putExtra("path", c.photo))
+                }
             })
         }
 

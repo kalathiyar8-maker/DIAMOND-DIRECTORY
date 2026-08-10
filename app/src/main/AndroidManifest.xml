@@ -39,6 +39,10 @@
             android:turnScreenOn="true"
             android:excludeFromRecents="true"/>
 
+        <activity
+            android:name=".ImageViewerActivity"
+            android:exported="false"/>
+
         <receiver
             android:name=".CallReceiver"
             android:exported="true">
