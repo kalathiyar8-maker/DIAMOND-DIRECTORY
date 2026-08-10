@@ -9,7 +9,9 @@ data class Contact(
     var name: String,
     var phone: String,
     var dept: String,
-    var note: String
+    var note: String,
+    var photo: String = "",                       // internal file path ("" = none)
+    val createdAt: Long = System.currentTimeMillis()  // auto date/time/day
 )
 
 /** Local storage backed by SharedPreferences (JSON). No external DB needed. */
@@ -19,6 +21,8 @@ object Store {
 
     val contacts = mutableListOf<Contact>()
     val departments = mutableListOf<String>()
+    var popupEnabled = true            // call-end popup ON/OFF
+    var skipIfInPhonebook = true       // no popup if number already in phone contacts
     private var loaded = false
 
     fun load(ctx: Context) {
@@ -35,6 +39,8 @@ object Store {
         }
         try {
             val root = JSONObject(raw)
+            popupEnabled = root.optBoolean("popupEnabled", true)
+            skipIfInPhonebook = root.optBoolean("skipIfInPhonebook", true)
             val da = root.getJSONArray("departments")
             for (i in 0 until da.length()) departments.add(da.getString(i))
             val ca = root.getJSONArray("contacts")
@@ -43,7 +49,9 @@ object Store {
                 contacts.add(
                     Contact(
                         o.getString("id"), o.getString("name"), o.getString("phone"),
-                        o.optString("dept", ""), o.optString("note", "")
+                        o.optString("dept", ""), o.optString("note", ""),
+                        o.optString("photo", ""),
+                        o.optLong("createdAt", System.currentTimeMillis())
                     )
                 )
             }
@@ -52,12 +60,15 @@ object Store {
 
     fun save(ctx: Context) {
         val root = JSONObject()
+        root.put("popupEnabled", popupEnabled)
+        root.put("skipIfInPhonebook", skipIfInPhonebook)
         val da = JSONArray(); departments.forEach { da.put(it) }
         val ca = JSONArray()
         contacts.forEach { c ->
             ca.put(
                 JSONObject().put("id", c.id).put("name", c.name)
                     .put("phone", c.phone).put("dept", c.dept).put("note", c.note)
+                    .put("photo", c.photo).put("createdAt", c.createdAt)
             )
         }
         root.put("departments", da).put("contacts", ca)
