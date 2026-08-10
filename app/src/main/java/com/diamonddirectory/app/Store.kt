@@ -10,8 +10,10 @@ data class Contact(
     var phone: String,
     var dept: String,
     var note: String,
-    var photo: String = "",                       // internal file path ("" = none)
-    val createdAt: Long = System.currentTimeMillis()  // auto date/time/day
+    var photo: String = "",            // worker photo (internal file path)
+    var aadhaarFront: String = "",     // Aadhaar front (internal file path)
+    var aadhaarBack: String = "",      // Aadhaar back (internal file path)
+    val createdAt: Long = System.currentTimeMillis()
 )
 
 /** Local storage backed by SharedPreferences (JSON). No external DB needed. */
@@ -21,8 +23,8 @@ object Store {
 
     val contacts = mutableListOf<Contact>()
     val departments = mutableListOf<String>()
-    var popupEnabled = true            // call-end popup ON/OFF
-    var skipIfInPhonebook = true       // no popup if number already in phone contacts
+    var popupEnabled = true            // any call popup ON/OFF
+    var skipIfInPhonebook = true       // no save-popup if number in phone contacts
     private var loaded = false
 
     fun load(ctx: Context) {
@@ -51,6 +53,8 @@ object Store {
                         o.getString("id"), o.getString("name"), o.getString("phone"),
                         o.optString("dept", ""), o.optString("note", ""),
                         o.optString("photo", ""),
+                        o.optString("aadhaarFront", ""),
+                        o.optString("aadhaarBack", ""),
                         o.optLong("createdAt", System.currentTimeMillis())
                     )
                 )
@@ -68,7 +72,8 @@ object Store {
             ca.put(
                 JSONObject().put("id", c.id).put("name", c.name)
                     .put("phone", c.phone).put("dept", c.dept).put("note", c.note)
-                    .put("photo", c.photo).put("createdAt", c.createdAt)
+                    .put("photo", c.photo).put("aadhaarFront", c.aadhaarFront)
+                    .put("aadhaarBack", c.aadhaarBack).put("createdAt", c.createdAt)
             )
         }
         root.put("departments", da).put("contacts", ca)
@@ -77,9 +82,16 @@ object Store {
     }
 
     private fun norm(p: String) = p.filter { it.isDigit() }
-    fun exists(phone: String): Boolean {
+    fun exists(phone: String): Boolean = findByPhone(phone) != null
+    fun findByPhone(phone: String): Contact? {
         val n = norm(phone)
-        return n.isNotEmpty() && contacts.any { norm(it.phone) == n }
+        if (n.isEmpty()) return null
+        // match on last 10 digits to survive +91 / 0 prefixes
+        val tail = if (n.length >= 10) n.takeLast(10) else n
+        return contacts.firstOrNull {
+            val cn = norm(it.phone)
+            cn == n || (cn.length >= 10 && cn.takeLast(10) == tail)
+        }
     }
     fun newId() = System.currentTimeMillis().toString(36) + (0..9999).random()
 }

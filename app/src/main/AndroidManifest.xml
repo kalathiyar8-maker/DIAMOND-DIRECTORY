@@ -31,6 +31,14 @@
             android:turnScreenOn="true"
             android:excludeFromRecents="true"/>
 
+        <activity
+            android:name=".CallerInfoActivity"
+            android:exported="false"
+            android:theme="@style/Theme.DD.Popup"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"/>
+
         <receiver
             android:name=".CallReceiver"
             android:exported="true">

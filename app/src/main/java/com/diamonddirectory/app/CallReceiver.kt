@@ -7,12 +7,6 @@ import android.net.Uri
 import android.provider.ContactsContract
 import android.telephony.TelephonyManager
 
-/**
- * When a call ends, shows the save-popup only if:
- *  - popup is enabled, AND
- *  - the number is not already in Diamond Directory, AND
- *  - (if the setting is on) the number is not in the phone's own contacts.
- */
 class CallReceiver : BroadcastReceiver() {
 
     override fun onReceive(ctx: Context, intent: Intent) {
@@ -31,10 +25,20 @@ class CallReceiver : BroadcastReceiver() {
                     sawCall = false
                     val num = lastNumber
                     lastNumber = null
-                    if (!num.isNullOrBlank()) {
-                        Store.load(ctx)
-                        if (!Store.popupEnabled) return
-                        if (Store.exists(num)) return
+                    if (num.isNullOrBlank()) return
+
+                    Store.load(ctx)
+                    if (!Store.popupEnabled) return
+
+                    val known = Store.findByPhone(num)
+                    if (known != null) {
+                        // saved in our app -> show its name / dept / note
+                        val i = Intent(ctx, CallerInfoActivity::class.java)
+                        i.putExtra("id", known.id)
+                        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        ctx.startActivity(i)
+                    } else {
+                        // unknown -> optionally skip if in phone contacts
                         if (Store.skipIfInPhonebook && inPhonebook(ctx, num)) return
                         val i = Intent(ctx, SavePopupActivity::class.java)
                         i.putExtra("number", num)
@@ -46,7 +50,6 @@ class CallReceiver : BroadcastReceiver() {
         }
     }
 
-    /** true if the number already exists in the phone's contact directory */
     private fun inPhonebook(ctx: Context, number: String): Boolean {
         return try {
             val uri = Uri.withAppendedPath(

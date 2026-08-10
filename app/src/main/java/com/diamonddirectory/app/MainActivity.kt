@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
@@ -24,11 +25,14 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import java.io.BufferedOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -45,6 +49,12 @@ class MainActivity : AppCompatActivity() {
     private val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         val cb = pendingPhoto; pendingPhoto = null
         if (uri != null && cb != null) cb(uri)
+    }
+    private var cameraUri: Uri? = null
+    private val takePicture = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val cb = pendingPhoto; pendingPhoto = null
+        val u = cameraUri; cameraUri = null
+        if (success && u != null && cb != null) cb(u)
     }
 
     private val guDays = arrayOf("રવિવાર","સોમવાર","મંગળવાર","બુધવાર","ગુરુવાર","શુક્રવાર","શનિવાર")
@@ -146,12 +156,10 @@ class MainActivity : AppCompatActivity() {
     // ---------------- side menu ----------------
     private fun buildDrawer() {
         panelInner.removeAllViews()
-
         panelInner.addView(TextView(this).apply {
             text = "\uD83D\uDC8E Diamond Directory"; textSize = 17f
             setTextColor(0xFF0B1E3B.toInt())
         })
-
         panelInner.addView(toggleRow("કોલ પછી પોપ-અપ", Store.popupEnabled) { c ->
             Store.popupEnabled = c; Store.save(this); toast(if (c) "પોપ-અપ ચાલુ" else "પોપ-અપ બંધ")
         })
@@ -159,9 +167,7 @@ class MainActivity : AppCompatActivity() {
             Store.skipIfInPhonebook = c; Store.save(this)
             toast(if (c) "ફોન-ડિરેક્ટરીના નંબર છોડશે" else "બધા નવા નંબર બતાવશે")
         })
-
         panelInner.addView(divider())
-
         panelInner.addView(drawerItem("બધા સંપર્ક", Store.contacts.size, currentDept == null) {
             currentDept = null; onDrawerSelect()
         })
@@ -169,20 +175,18 @@ class MainActivity : AppCompatActivity() {
             val n = Store.contacts.count { it.dept == d }
             panelInner.addView(drawerItem(d, n, currentDept == d) { currentDept = d; onDrawerSelect() })
         }
-
         panelInner.addView(divider())
         panelInner.addView(drawerItem("\u2699\uFE0F ડિપાર્ટમેન્ટ મેનેજ કરો", -1, false) {
             drawer.closeDrawer(GravityCompat.START); manageDepts()
         })
-        panelInner.addView(drawerItem("\u2B07\uFE0F CSV / Excel એક્સપોર્ટ", -1, false) {
+        panelInner.addView(drawerItem("\u2B07\uFE0F CSV / Excel + ફોટો એક્સપોર્ટ", -1, false) {
             drawer.closeDrawer(GravityCompat.START); exportMenu()
         })
     }
 
     private fun toggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit): View {
         val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(0, pad(12), 0, pad(4))
         }
         row.addView(TextView(this).apply {
@@ -198,8 +202,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun onDrawerSelect() {
         titleView.text = "\uD83D\uDC8E " + (currentDept ?: "બધા સંપર્ક")
-        drawer.closeDrawer(GravityCompat.START)
-        refreshList()
+        drawer.closeDrawer(GravityCompat.START); refreshList()
     }
 
     private fun divider(): View = View(this).apply {
@@ -211,12 +214,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun drawerItem(label: String, count: Int, active: Boolean, onClick: () -> Unit): View {
         val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(pad(10), pad(12), pad(10), pad(12))
             if (active) setBackgroundColor(0xFFE7EEFB.toInt())
-            isClickable = true
-            setOnClickListener { onClick() }
+            isClickable = true; setOnClickListener { onClick() }
         }
         row.addView(TextView(this).apply {
             text = label; textSize = 15f
@@ -251,26 +252,27 @@ class MainActivity : AppCompatActivity() {
         }
         items.forEach { c ->
             val card = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
                 setBackgroundColor(0xFFFFFFFF.toInt())
                 setPadding(pad(12), pad(10), pad(12), pad(10))
                 layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = pad(8) }
-                isClickable = true
-                setOnClickListener { contactActions(c) }
+                isClickable = true; setOnClickListener { contactActions(c) }
             }
             val thumb = loadThumb(c.photo, pad(48))
-            if (thumb != null) {
-                card.addView(ImageView(this).apply {
-                    setImageBitmap(thumb)
-                    scaleType = ImageView.ScaleType.CENTER_CROP
-                    layoutParams = LinearLayout.LayoutParams(pad(48), pad(48)).apply { marginEnd = pad(12) }
-                })
-            }
+            if (thumb != null) card.addView(ImageView(this).apply {
+                setImageBitmap(thumb); scaleType = ImageView.ScaleType.CENTER_CROP
+                layoutParams = LinearLayout.LayoutParams(pad(48), pad(48)).apply { marginEnd = pad(12) }
+            })
             val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             col.addView(TextView(this).apply { text = c.name; textSize = 16f; setTextColor(0xFF12203A.toInt()) })
             val sub = buildString { if (c.dept.isNotEmpty()) append("[${c.dept}]  "); append(c.phone) }
             col.addView(TextView(this).apply { text = sub; textSize = 13f; setTextColor(0xFF67779A.toInt()) })
+            val badges = buildString {
+                if (c.aadhaarFront.isNotEmpty() || c.aadhaarBack.isNotEmpty()) append("\uD83E\uDEAA આધાર  ")
+            }
+            if (badges.isNotEmpty()) col.addView(TextView(this).apply {
+                text = badges; textSize = 11f; setTextColor(0xFF0E9F6E.toInt())
+            })
             col.addView(TextView(this).apply {
                 text = "\uD83D\uDD52 " + fmtDate(c.createdAt); textSize = 11f; setTextColor(0xFF9AA7BF.toInt())
             })
@@ -294,39 +296,54 @@ class MainActivity : AppCompatActivity() {
             }.show()
     }
 
-    // ---------------- add / edit (with photo) ----------------
+    // ---------------- add / edit (photo + aadhaar) ----------------
     private fun addOrEdit(existing: Contact?) {
         val cid = existing?.id ?: Store.newId()
-        var tmpPhoto = existing?.photo ?: ""
-
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad(20), pad(8), pad(20), 0)
         }
 
-        val preview = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(0xFFEEF2F8.toInt())
-            layoutParams = LinearLayout.LayoutParams(pad(80), pad(80))
-        }
-        fun paint() {
-            val b = loadThumb(tmpPhoto, pad(80))
-            if (b != null) preview.setImageBitmap(b) else preview.setImageResource(android.R.drawable.ic_menu_camera)
-        }
-        paint()
-
-        val photoBtns = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, pad(6), 0, 0) }
-        val addPhoto = Button(this).apply { text = "ફોટો ઉમેરો/બદલો"; textSize = 12f }
-        val delPhoto = Button(this).apply { text = "દૂર કરો"; textSize = 12f }
-        addPhoto.setOnClickListener {
-            pendingPhoto = { uri ->
-                val path = savePhoto(uri, cid)
-                if (path.isNotEmpty()) { tmpPhoto = path; paint() } else toast("ફોટો સેવ ન થયો")
+        // reusable image slot -> returns a getter for current path
+        fun imageSlot(label: String, initial: String, suffix: String): () -> String {
+            var path = initial
+            box.addView(TextView(this).apply {
+                text = label; textSize = 12f; setTextColor(0xFF67779A.toInt()); setPadding(0, pad(12), 0, pad(2))
+            })
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            val preview = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundColor(0xFFEEF2F8.toInt())
+                layoutParams = LinearLayout.LayoutParams(pad(72), pad(72)).apply { marginEnd = pad(10) }
             }
-            pickImage.launch("image/*")
+            fun paint() {
+                val b = loadThumb(path, pad(72))
+                if (b != null) preview.setImageBitmap(b) else preview.setImageResource(android.R.drawable.ic_menu_camera)
+            }
+            paint()
+            val btns = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            btns.addView(Button(this).apply {
+                text = "ઉમેરો/બદલો"; textSize = 12f
+                setOnClickListener {
+                    pendingPhoto = { uri ->
+                        val p = savePhoto(uri, cid, suffix)
+                        if (p.isNotEmpty()) { path = p; paint() } else toast("સેવ ન થયું")
+                    }
+                    chooseSource()
+                }
+            })
+            btns.addView(Button(this).apply {
+                text = "દૂર કરો"; textSize = 12f
+                setOnClickListener { path = ""; paint() }
+            })
+            row.addView(preview); row.addView(btns)
+            box.addView(row)
+            return { path }
         }
-        delPhoto.setOnClickListener { tmpPhoto = ""; paint() }   // app-copy removed; gallery untouched
-        photoBtns.addView(addPhoto); photoBtns.addView(delPhoto)
+
+        val getPhoto = imageSlot("કારીગરનો ફોટો", existing?.photo ?: "", "")
+        val getFront = imageSlot("આધાર કાર્ડ - આગળની બાજુ", existing?.aadhaarFront ?: "", "_aadhaar_f")
+        val getBack  = imageSlot("આધાર કાર્ડ - પાછળની બાજુ", existing?.aadhaarBack ?: "", "_aadhaar_b")
 
         val name = EditText(this).apply { hint = "નામ"; setText(existing?.name ?: "") }
         val phone = EditText(this).apply { hint = "ફોન નંબર"; setText(existing?.phone ?: "") }
@@ -336,7 +353,7 @@ class MainActivity : AppCompatActivity() {
         spin.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, depts)
         existing?.let { spin.setSelection(depts.indexOf(it.dept).coerceAtLeast(0)) }
 
-        box.addView(preview); box.addView(photoBtns)
+        box.addView(TextView(this).apply { text = "નામ"; setPadding(0, pad(12), 0, 0) })
         box.addView(name); box.addView(phone)
         box.addView(TextView(this).apply { text = "ડિપાર્ટમેન્ટ"; setPadding(0, pad(10), 0, 0) })
         box.addView(spin); box.addView(note)
@@ -351,10 +368,12 @@ class MainActivity : AppCompatActivity() {
                 if (nm.isEmpty() || ph.isEmpty()) { toast("નામ અને નંબર જરૂરી છે"); return@setPositiveButton }
                 val dept = if (spin.selectedItemPosition == 0) "" else spin.selectedItem.toString()
                 if (existing == null) {
-                    Store.contacts.add(Contact(cid, nm, ph, dept, note.text.toString().trim(), tmpPhoto))
+                    Store.contacts.add(Contact(cid, nm, ph, dept, note.text.toString().trim(),
+                        getPhoto(), getFront(), getBack()))
                 } else {
                     existing.name = nm; existing.phone = ph; existing.dept = dept
-                    existing.note = note.text.toString().trim(); existing.photo = tmpPhoto
+                    existing.note = note.text.toString().trim()
+                    existing.photo = getPhoto(); existing.aadhaarFront = getFront(); existing.aadhaarBack = getBack()
                 }
                 Store.save(this); buildDrawer(); refreshList()
             }
@@ -363,19 +382,49 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------- photos ----------------
-    private fun savePhoto(uri: Uri, id: String): String {
+    private fun chooseSource() {
+        AlertDialog.Builder(this)
+            .setTitle("ફોટો ક્યાંથી લેવો?")
+            .setItems(arrayOf("\uD83D\uDCF7 કેમેરા", "\uD83D\uDDBC\uFE0F ગેલેરી")) { _, w ->
+                if (w == 0) launchCamera() else pickImage.launch("image/*")
+            }
+            .setOnCancelListener { pendingPhoto = null }
+            .show()
+    }
+
+    private fun launchCamera() {
+        try {
+            val f = File(cacheDir, "cam_${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
+            cameraUri = uri
+            // grant write access to every camera app so it can save the photo
+            val cam = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+            packageManager.queryIntentActivities(cam, PackageManager.MATCH_DEFAULT_ONLY).forEach {
+                grantUriPermission(
+                    it.activityInfo.packageName, uri,
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            takePicture.launch(uri)
+        } catch (e: Exception) {
+            pendingPhoto = null
+            toast("કેમેરા ખૂલ્યો નહીં")
+        }
+    }
+
+    private fun savePhoto(uri: Uri, id: String, suffix: String): String {
         return try {
             val opt = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, opt) }
             var sample = 1
-            val maxDim = 1000
+            val maxDim = 1400   // higher, so Aadhaar text stays readable
             while (opt.outWidth / sample > maxDim || opt.outHeight / sample > maxDim) sample *= 2
             val o2 = BitmapFactory.Options().apply { inSampleSize = sample }
             val bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o2) }
                 ?: return ""
             val dir = File(filesDir, "photos").apply { mkdirs() }
-            val out = File(dir, "$id.jpg")
-            FileOutputStream(out).use { bmp.compress(Bitmap.CompressFormat.JPEG, 82, it) }
+            val out = File(dir, "$id$suffix.jpg")
+            FileOutputStream(out).use { bmp.compress(Bitmap.CompressFormat.JPEG, 85, it) }
             out.absolutePath
         } catch (e: Exception) { "" }
     }
@@ -401,45 +450,64 @@ class MainActivity : AppCompatActivity() {
         return "${guDays[c.get(Calendar.DAY_OF_WEEK) - 1]}, $d  $t"
     }
 
-    // ---------------- CSV export ----------------
+    // ---------------- export (CSV + images -> ZIP) ----------------
     private fun exportMenu() {
-        val opts = mutableListOf("બધા સંપર્ક")
-        opts.addAll(Store.departments)
+        val opts = mutableListOf("બધા સંપર્ક"); opts.addAll(Store.departments)
         AlertDialog.Builder(this)
-            .setTitle("CSV / Excel એક્સપોર્ટ")
-            .setItems(opts.toTypedArray()) { _, i ->
-                exportCsv(if (i == 0) null else opts[i])
-            }.show()
+            .setTitle("CSV / Excel + ફોટો એક્સપોર્ટ")
+            .setItems(opts.toTypedArray()) { _, i -> exportZip(if (i == 0) null else opts[i]) }
+            .show()
     }
 
     private fun csv(s: String): String =
         if (s.contains(",") || s.contains("\"") || s.contains("\n"))
             "\"" + s.replace("\"", "\"\"") + "\"" else s
 
-    private fun exportCsv(dept: String?) {
+    private fun addToZip(zos: ZipOutputStream, path: String, entryName: String) {
+        if (path.isEmpty() || entryName.isEmpty()) return
+        val f = File(path); if (!f.exists()) return
+        zos.putNextEntry(ZipEntry(entryName))
+        f.inputStream().use { it.copyTo(zos) }
+        zos.closeEntry()
+    }
+
+    private fun exportZip(dept: String?) {
         val rows = Store.contacts.filter { dept == null || it.dept == dept }.sortedBy { it.name.lowercase() }
         if (rows.isEmpty()) { toast("કોઈ સંપર્ક નથી"); return }
-        val sb = StringBuilder("\uFEFF")   // BOM so Excel reads Gujarati
-        sb.append("Name,Phone,Department,Note,Date,Time,Day\n")
-        rows.forEach { c ->
-            val cal = Calendar.getInstance().apply { timeInMillis = c.createdAt }
-            val date = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(cal.time)
-            val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(cal.time)
-            val day = guDays[cal.get(Calendar.DAY_OF_WEEK) - 1]
-            sb.append(listOf(c.name, c.phone, c.dept, c.note, date, time, day)
-                .joinToString(",") { csv(it) }).append("\n")
-        }
         try {
             val safe = (dept ?: "All").replace(Regex("[^A-Za-z0-9]"), "_")
-            val f = File(cacheDir, "DiamondDirectory_$safe.csv")
-            f.writeText(sb.toString())
-            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", f)
+            val zipFile = File(cacheDir, "DiamondDirectory_$safe.zip")
+            val zos = ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile)))
+
+            val sb = StringBuilder("\uFEFF")
+            sb.append("No,Name,Phone,Department,Note,Date,Time,Day,PhotoFile,AadhaarFront,AadhaarBack\n")
+            rows.forEachIndexed { idx, c ->
+                val cal = Calendar.getInstance().apply { timeInMillis = c.createdAt }
+                val date = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(cal.time)
+                val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(cal.time)
+                val day = guDays[cal.get(Calendar.DAY_OF_WEEK) - 1]
+                val base = "${idx + 1}_" + c.name.replace(Regex("[^A-Za-z0-9]"), "_").ifEmpty { "contact" }
+                val pName = if (c.photo.isNotEmpty()) "$base.jpg" else ""
+                val fName = if (c.aadhaarFront.isNotEmpty()) "${base}_aadhaar_front.jpg" else ""
+                val bName = if (c.aadhaarBack.isNotEmpty()) "${base}_aadhaar_back.jpg" else ""
+                sb.append(listOf((idx + 1).toString(), c.name, c.phone, c.dept, c.note,
+                    date, time, day, pName, fName, bName).joinToString(",") { csv(it) }).append("\n")
+                addToZip(zos, c.photo, "images/$pName")
+                addToZip(zos, c.aadhaarFront, "images/$fName")
+                addToZip(zos, c.aadhaarBack, "images/$bName")
+            }
+            zos.putNextEntry(ZipEntry("contacts.csv"))
+            zos.write(sb.toString().toByteArray(Charsets.UTF_8))
+            zos.closeEntry()
+            zos.close()
+
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", zipFile)
             val send = Intent(Intent.ACTION_SEND).apply {
-                type = "text/csv"
+                type = "application/zip"
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(send, "CSV એક્સપોર્ટ / શેર કરો"))
+            startActivity(Intent.createChooser(send, "એક્સપોર્ટ / શેર કરો"))
         } catch (e: Exception) { toast("એક્સપોર્ટમાં તકલીફ") }
     }
 
