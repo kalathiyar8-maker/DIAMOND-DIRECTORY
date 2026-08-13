@@ -112,10 +112,14 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFFEDF1F7.toInt())
         }
 
-        // header (diamond image banner + dark scrim + controls)
+        // header (simple gradient bar)
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(pad(8), pad(14), pad(12), pad(14))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(0xFF0B1E3B.toInt(), 0xFF16345F.toInt())
+            )
+            setPadding(pad(8), pad(12), pad(12), pad(12))
         }
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val menuBtn = TextView(this).apply {
@@ -125,9 +129,7 @@ class MainActivity : AppCompatActivity() {
         }
         titleView = TextView(this).apply {
             text = "\uD83D\uDC8E Diamond Directory"; setTextColor(0xFFFFFFFF.toInt())
-            textSize = 19f
-            setShadowLayer(6f, 0f, 2f, 0xCC000000.toInt())
-            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            textSize = 18f; layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
         }
         val addBtn = TextView(this).apply {
             text = "+ નવો"; setTextColor(0xFF0B1E3B.toInt()); textSize = 13f
@@ -137,31 +139,12 @@ class MainActivity : AppCompatActivity() {
         }
         bar.addView(menuBtn); bar.addView(titleView); bar.addView(addBtn)
         header.addView(bar)
-        header.addView(TextView(this).apply {
-            text = "Contact & Team Manager"
-            setTextColor(0xFFBFE3FF.toInt()); textSize = 11f
-            setShadowLayer(5f, 0f, 1f, 0xCC000000.toInt())
-            setPadding(pad(8), pad(4), 0, 0)
-        })
         header.addView(View(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 intArrayOf(0xFF38BDF8.toInt(), 0xFF2563C9.toInt(), 0xFF7DD3FC.toInt()))
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, pad(3)).apply { topMargin = pad(12) }
         })
-
-        val headerFrame = FrameLayout(this)
-        headerFrame.addView(ImageView(this).apply {
-            setImageResource(R.drawable.dd_header)
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
-        })
-        headerFrame.addView(View(this).apply {
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xD90B1E3B.toInt(), 0xF20B1E3B.toInt()))
-            layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
-        })
-        headerFrame.addView(header, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-        content.addView(headerFrame, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        content.addView(header)
 
         searchInput = EditText(this).apply {
             hint = "\uD83D\uDD0D શોધો…"; setSingleLine(true)
