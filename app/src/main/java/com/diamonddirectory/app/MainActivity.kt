@@ -63,6 +63,9 @@ class MainActivity : AppCompatActivity() {
         val u = cameraUri; cameraUri = null
         if (ok && u != null && cb != null) cb(u)
     }
+    private val restorePicker = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) restoreFrom(uri)
+    }
 
     private val guDays = arrayOf("રવિવાર","સોમવાર","મંગળવાર","બુધવાર","ગુરુવાર","શુક્રવાર","શનિવાર")
     private val catKeys = listOf("neutral", "good", "medium", "bad")
@@ -109,14 +112,10 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFFEDF1F7.toInt())
         }
 
-        // header
+        // header (diamond image banner + dark scrim + controls)
         val header = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(0xFF0B1E3B.toInt(), 0xFF16345F.toInt())
-            )
-            setPadding(pad(8), pad(12), pad(12), pad(12))
+            setPadding(pad(8), pad(14), pad(12), pad(14))
         }
         val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         val menuBtn = TextView(this).apply {
@@ -126,7 +125,9 @@ class MainActivity : AppCompatActivity() {
         }
         titleView = TextView(this).apply {
             text = "\uD83D\uDC8E Diamond Directory"; setTextColor(0xFFFFFFFF.toInt())
-            textSize = 18f; layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+            textSize = 19f
+            setShadowLayer(6f, 0f, 2f, 0xCC000000.toInt())
+            layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
         }
         val addBtn = TextView(this).apply {
             text = "+ નવો"; setTextColor(0xFF0B1E3B.toInt()); textSize = 13f
@@ -136,13 +137,31 @@ class MainActivity : AppCompatActivity() {
         }
         bar.addView(menuBtn); bar.addView(titleView); bar.addView(addBtn)
         header.addView(bar)
-        // accent line
+        header.addView(TextView(this).apply {
+            text = "Contact & Team Manager"
+            setTextColor(0xFFBFE3FF.toInt()); textSize = 11f
+            setShadowLayer(5f, 0f, 1f, 0xCC000000.toInt())
+            setPadding(pad(8), pad(4), 0, 0)
+        })
         header.addView(View(this).apply {
             background = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 intArrayOf(0xFF38BDF8.toInt(), 0xFF2563C9.toInt(), 0xFF7DD3FC.toInt()))
             layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, pad(3)).apply { topMargin = pad(12) }
         })
-        content.addView(header)
+
+        val headerFrame = FrameLayout(this)
+        headerFrame.addView(ImageView(this).apply {
+            setImageResource(R.drawable.dd_header)
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        })
+        headerFrame.addView(View(this).apply {
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xD90B1E3B.toInt(), 0xF20B1E3B.toInt()))
+            layoutParams = FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        })
+        headerFrame.addView(header, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        content.addView(headerFrame, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
 
         searchInput = EditText(this).apply {
             hint = "\uD83D\uDD0D શોધો…"; setSingleLine(true)
@@ -211,6 +230,13 @@ class MainActivity : AppCompatActivity() {
         })
         panelInner.addView(drawerItem("\uD83D\uDCE4 એપ (APK) શેર કરો", -1, false) {
             drawer.closeDrawer(GravityCompat.START); shareApk()
+        })
+        panelInner.addView(divider())
+        panelInner.addView(drawerItem("\uD83D\uDCBE બેકઅપ (બધો ડેટા સેવ)", -1, false) {
+            drawer.closeDrawer(GravityCompat.START); backupAll()
+        })
+        panelInner.addView(drawerItem("\u267B\uFE0F રિસ્ટોર (પાછું લાવો)", -1, false) {
+            drawer.closeDrawer(GravityCompat.START); confirmRestore()
         })
     }
 
@@ -493,11 +519,10 @@ class MainActivity : AppCompatActivity() {
     // ============ notes ============
     private fun openNotes() {
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad(16), pad(8), pad(16), 0) }
-        val addRow = LinearLayout(this)
-        val input = EditText(this).apply { hint = "નવી નોટ / વિગત"; layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f) }
-        val addBtn = Button(this).apply { text = "ઉમેરો" }
-        addRow.addView(input); addRow.addView(addBtn); box.addView(addRow)
-        val holder = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; box.addView(holder)
+        val holder = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
+        val newBtn = Button(this).apply { text = "\u2795 નવી નોટ" }
+        box.addView(newBtn); box.addView(holder)
 
         fun redraw() {
             holder.removeAllViews()
@@ -511,12 +536,29 @@ class MainActivity : AppCompatActivity() {
                     background = roundedBg(0xFFF3F6FB.toInt(), pad(10).toFloat())
                     setPadding(pad(12), pad(10), pad(12), pad(10))
                     layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = pad(8) }
+                    isClickable = true
                 }
                 item.addView(TextView(this).apply { text = n.text; textSize = 15f; setTextColor(0xFF12203A.toInt()) })
-                val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                if (n.photos.isNotEmpty()) {
+                    val strip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, pad(6), 0, 0) }
+                    n.photos.take(4).forEach { p ->
+                        val b = loadThumb(p, pad(48))
+                        if (b != null) strip.addView(ImageView(this).apply {
+                            setImageBitmap(b); scaleType = ImageView.ScaleType.CENTER_CROP
+                            layoutParams = LinearLayout.LayoutParams(pad(48), pad(48)).apply { marginEnd = pad(6) }
+                            setOnClickListener { openImage(p) }
+                        })
+                    }
+                    item.addView(strip)
+                }
+                val bottom = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, pad(6), 0, 0) }
                 bottom.addView(TextView(this).apply {
                     text = "\uD83D\uDD52 " + fmtDate(n.createdAt); textSize = 11f; setTextColor(0xFF9AA7BF.toInt())
                     layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
+                })
+                bottom.addView(TextView(this).apply {
+                    text = "\u270F\uFE0F"; setPadding(pad(8), 0, pad(8), 0); isClickable = true
+                    setOnClickListener { noteEditor(n) { redraw() } }
                 })
                 bottom.addView(TextView(this).apply {
                     text = "\uD83D\uDDD1\uFE0F"; isClickable = true
@@ -526,17 +568,133 @@ class MainActivity : AppCompatActivity() {
                 holder.addView(item)
             }
         }
-        addBtn.setOnClickListener {
-            val t = input.text.toString().trim()
-            if (t.isNotEmpty()) {
-                Store.notes.add(Note(Store.newId(), t, System.currentTimeMillis()))
-                Store.save(this); input.setText(""); redraw(); buildDrawer()
-            }
-        }
+        newBtn.setOnClickListener { noteEditor(null) { redraw() } }
         redraw()
         val scroll = ScrollView(this); scroll.addView(box)
         AlertDialog.Builder(this).setTitle("\uD83D\uDCDD નોટ્સ (તારીખ પ્રમાણે)").setView(scroll)
             .setPositiveButton("બંધ કરો", null).show()
+    }
+
+    /** New / edit note window with gallery + camera photos. */
+    private fun noteEditor(existing: Note?, onDone: () -> Unit) {
+        val nid = existing?.id ?: Store.newId()
+        val photos = existing?.photos?.toMutableList() ?: mutableListOf()
+
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad(18), pad(8), pad(18), 0) }
+        val input = EditText(this).apply { hint = "વિગત / નોટ લખો"; setText(existing?.text ?: ""); minLines = 3 }
+        box.addView(input)
+
+        box.addView(TextView(this).apply { text = "ફોટા"; textSize = 12f; setTextColor(0xFF67779A.toInt()); setPadding(0, pad(12), 0, pad(4)) })
+        val strip = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun paintStrip() {
+            strip.removeAllViews()
+            photos.forEach { p ->
+                val cell = FrameLayout(this)
+                val b = loadThumb(p, pad(60))
+                cell.addView(ImageView(this).apply {
+                    if (b != null) setImageBitmap(b) else setImageResource(android.R.drawable.ic_menu_report_image)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    layoutParams = FrameLayout.LayoutParams(pad(60), pad(60))
+                    setOnClickListener { openImage(p) }
+                })
+                cell.addView(TextView(this).apply {
+                    text = "\u2715"; setTextColor(0xFFFFFFFF.toInt()); textSize = 12f
+                    setBackgroundColor(0xAA000000.toInt()); setPadding(pad(4), 0, pad(4), 0)
+                    isClickable = true
+                    setOnClickListener { photos.remove(p); paintStrip() }
+                    layoutParams = FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.TOP or Gravity.END)
+                })
+                strip.addView(cell, LinearLayout.LayoutParams(pad(60), pad(60)).apply { marginEnd = pad(8) })
+            }
+        }
+        paintStrip()
+        val addPhoto = Button(this).apply {
+            text = "\uD83D\uDCF7 / \uD83D\uDDBC\uFE0F ફોટો ઉમેરો"; textSize = 12f
+            setOnClickListener {
+                pendingPhoto = { uri ->
+                    val p = savePhoto(uri, nid, "_note_" + System.currentTimeMillis())
+                    if (p.isNotEmpty()) { photos.add(p); paintStrip() } else toast("સેવ ન થયું")
+                }
+                chooseSource()
+            }
+        }
+        val strScroll = HorizontalScrollView(this); strScroll.addView(strip)
+        box.addView(strScroll); box.addView(addPhoto)
+
+        val scroll = ScrollView(this); scroll.addView(box)
+        AlertDialog.Builder(this)
+            .setTitle(if (existing == null) "\uD83D\uDCDD નવી નોટ" else "નોટ એડિટ")
+            .setView(scroll)
+            .setPositiveButton("સેવ") { _, _ ->
+                val t = input.text.toString().trim()
+                if (t.isEmpty() && photos.isEmpty()) { toast("કંઈક લખો કે ફોટો ઉમેરો"); return@setPositiveButton }
+                if (existing == null) {
+                    Store.notes.add(Note(nid, t, System.currentTimeMillis(), photos))
+                } else {
+                    existing.text = t; existing.photos.clear(); existing.photos.addAll(photos)
+                }
+                Store.save(this); buildDrawer(); onDone()
+            }
+            .setNegativeButton("રદ", null).show()
+    }
+
+    // ============ backup / restore ============
+    private fun backupAll() {
+        try {
+            val zipFile = File(cacheDir, "DiamondDirectory_Backup.zip")
+            val zos = ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile)))
+            // 1) all data as json
+            zos.putNextEntry(ZipEntry("data.json"))
+            zos.write(Store.rawJson(this).toByteArray(Charsets.UTF_8)); zos.closeEntry()
+            // 2) all image files
+            val dir = File(filesDir, "photos")
+            dir.listFiles()?.forEach { f ->
+                zos.putNextEntry(ZipEntry("photos/" + f.name))
+                f.inputStream().use { it.copyTo(zos) }; zos.closeEntry()
+            }
+            zos.close()
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", zipFile)
+            val send = Intent(Intent.ACTION_SEND).apply {
+                type = "application/zip"; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(send, "બેકઅપ સેવ / શેર કરો"))
+        } catch (e: Exception) { toast("બેકઅપ ન થયું") }
+    }
+
+    private fun confirmRestore() {
+        AlertDialog.Builder(this)
+            .setTitle("રિસ્ટોર કરવું?")
+            .setMessage("બેકઅપ ફાઈલ (DiamondDirectory_Backup.zip) પસંદ કરો. હાલનો ડેટા એનાથી બદલાઈ જશે.")
+            .setNegativeButton("રદ", null)
+            .setPositiveButton("ફાઈલ પસંદ કરો") { _, _ -> restorePicker.launch("application/zip") }
+            .show()
+    }
+
+    private fun restoreFrom(uri: Uri) {
+        try {
+            val dir = File(filesDir, "photos").apply { mkdirs() }
+            var json: String? = null
+            java.util.zip.ZipInputStream(contentResolver.openInputStream(uri)).use { zis ->
+                var e = zis.nextEntry
+                while (e != null) {
+                    val name = e.name
+                    if (name == "data.json") {
+                        json = zis.readBytes().toString(Charsets.UTF_8)
+                    } else if (name.startsWith("photos/") && !e.isDirectory) {
+                        val out = File(dir, name.substringAfterLast('/'))
+                        FileOutputStream(out).use { o -> zis.copyTo(o) }
+                    }
+                    zis.closeEntry(); e = zis.nextEntry
+                }
+            }
+            if (json != null) {
+                Store.writeRaw(this, json!!)
+                Store.reload(this)
+                currentDept = null
+                buildDrawer(); refreshList()
+                toast("રિસ્ટોર થઈ ગયું ✓")
+            } else toast("ખોટી બેકઅપ ફાઈલ")
+        } catch (e: Exception) { toast("રિસ્ટોર ન થયું") }
     }
 
     // ============ reminder ============
@@ -588,11 +746,13 @@ class MainActivity : AppCompatActivity() {
     }
     private fun exportZip(dept: String?) {
         val rows = Store.contacts.filter { dept == null || it.dept == dept }.sortedBy { it.name.lowercase() }
-        if (rows.isEmpty()) { toast("કોઈ સંપર્ક નથી"); return }
+        if (rows.isEmpty() && dept != null) { toast("કોઈ સંપર્ક નથી"); return }
         try {
             val safe = (dept ?: "All").replace(Regex("[^A-Za-z0-9]"), "_")
             val zipFile = File(cacheDir, "DiamondDirectory_$safe.zip")
             val zos = ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile)))
+
+            // ---- 1) CONTACTS ----
             val sb = StringBuilder("\uFEFF")
             sb.append("No,Name,Phone,Department,Category,Note,Date,Time,Day,PhotoFile,AadhaarFront,AadhaarBack\n")
             val catMap = mapOf("good" to "Good", "medium" to "Medium", "bad" to "Bad", "neutral" to "Neutral")
@@ -608,11 +768,30 @@ class MainActivity : AppCompatActivity() {
                 sb.append(listOf((idx + 1).toString(), c.name, c.phone, c.dept,
                     catMap[c.category] ?: "Neutral", c.note, date, time, day, pName, fName, bName)
                     .joinToString(",") { csv(it) }).append("\n")
-                addToZip(zos, c.photo, "images/$pName")
-                addToZip(zos, c.aadhaarFront, "images/$fName")
-                addToZip(zos, c.aadhaarBack, "images/$bName")
+                addToZip(zos, c.photo, "gallery/contacts/$pName")
+                addToZip(zos, c.aadhaarFront, "gallery/contacts/$fName")
+                addToZip(zos, c.aadhaarBack, "gallery/contacts/$bName")
             }
             zos.putNextEntry(ZipEntry("contacts.csv")); zos.write(sb.toString().toByteArray(Charsets.UTF_8)); zos.closeEntry()
+
+            // ---- 2) NOTES + note gallery (only in full "All" export) ----
+            if (dept == null) {
+                val nb = StringBuilder("\uFEFF")
+                nb.append("No,Note,Date,Time,Day,PhotoFiles\n")
+                Store.notes.sortedByDescending { it.createdAt }.forEachIndexed { idx, n ->
+                    val cal = Calendar.getInstance().apply { timeInMillis = n.createdAt }
+                    val date = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(cal.time)
+                    val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(cal.time)
+                    val day = guDays[cal.get(Calendar.DAY_OF_WEEK) - 1]
+                    val names = n.photos.mapIndexed { j, p ->
+                        val nm = "note${idx + 1}_${j + 1}.jpg"; addToZip(zos, p, "gallery/notes/$nm"); nm
+                    }.joinToString(" | ")
+                    nb.append(listOf((idx + 1).toString(), n.text, date, time, day, names)
+                        .joinToString(",") { csv(it) }).append("\n")
+                }
+                zos.putNextEntry(ZipEntry("notes.csv")); zos.write(nb.toString().toByteArray(Charsets.UTF_8)); zos.closeEntry()
+            }
+
             zos.close()
             val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", zipFile)
             val send = Intent(Intent.ACTION_SEND).apply {

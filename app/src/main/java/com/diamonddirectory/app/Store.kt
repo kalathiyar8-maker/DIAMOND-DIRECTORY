@@ -19,7 +19,12 @@ data class Contact(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-data class Note(val id: String, var text: String, val createdAt: Long)
+data class Note(
+    val id: String,
+    var text: String,
+    val createdAt: Long,
+    val photos: MutableList<String> = mutableListOf()
+)
 
 /** Local storage backed by SharedPreferences (JSON). */
 object Store {
@@ -63,7 +68,10 @@ object Store {
             val na = root.optJSONArray("notes")
             if (na != null) for (i in 0 until na.length()) {
                 val o = na.getJSONObject(i)
-                notes.add(Note(o.getString("id"), o.getString("text"), o.optLong("createdAt", 0)))
+                val ph = mutableListOf<String>()
+                val pa = o.optJSONArray("photos")
+                if (pa != null) for (j in 0 until pa.length()) ph.add(pa.getString(j))
+                notes.add(Note(o.getString("id"), o.getString("text"), o.optLong("createdAt", 0), ph))
             }
         } catch (_: Exception) { }
     }
@@ -82,7 +90,11 @@ object Store {
                 .put("popupOn", c.popupOn).put("createdAt", c.createdAt))
         }
         val na = JSONArray()
-        notes.forEach { n -> na.put(JSONObject().put("id", n.id).put("text", n.text).put("createdAt", n.createdAt)) }
+        notes.forEach { n ->
+            val pa = JSONArray(); n.photos.forEach { pa.put(it) }
+            na.put(JSONObject().put("id", n.id).put("text", n.text)
+                .put("createdAt", n.createdAt).put("photos", pa))
+        }
         root.put("departments", da).put("contacts", ca).put("notes", na)
         ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(KEY, root.toString()).apply()
     }
@@ -98,4 +110,15 @@ object Store {
         }
     }
     fun newId() = System.currentTimeMillis().toString(36) + (0..9999).random()
+
+    // ---- backup / restore helpers ----
+    fun rawJson(ctx: Context): String =
+        ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).getString(KEY, "") ?: ""
+    fun writeRaw(ctx: Context, json: String) {
+        ctx.getSharedPreferences(PREF, Context.MODE_PRIVATE).edit().putString(KEY, json).apply()
+    }
+    fun reload(ctx: Context) {
+        contacts.clear(); departments.clear(); notes.clear(); loaded = false
+        load(ctx)
+    }
 }
